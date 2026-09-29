@@ -1,0 +1,18 @@
+services:
+  proxy:
+    build: .
+    ports:
+      - "127.0.0.1:2022:2022"
+    volumes:
+      - ./config.yaml:/srv/config.yaml:ro
+      - ./logs:/srv/logs
+      - ./keys:/srv/keys:ro
+    depends_on:
+      - upstream
+
+  upstream:
+    build: ./upstream
+    ports:
+      - "127.0.0.1:2222:22"
+    volumes:
+      - ./keys/upstream_key.pub:/srv/keys/upstream_key.pub:ro

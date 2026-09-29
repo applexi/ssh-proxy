@@ -1,0 +1,19 @@
+# Example proxy config format 
+
+# Upstream server configuration
+server:
+  host: upstream 
+  port: 22
+  username: proxyuser
+  password: secret
+  private_key_file: ./keys/upstream_key
+
+# Client users
+users:
+  alice:
+    public_key: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIaZRWsormfAobr/XB9uSrilLHaIZd9I4z9QR7o3WhlH alice
+  bob:
+    password: bobbb
+
+# Log file directory that session logs will be written to
+log_dir: ./logs
