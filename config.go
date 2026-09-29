@@ -11,6 +11,7 @@ type Config struct {
 	Upstream UpstreamConfig        `yaml:"server"`
 	Users    map[string]UserConfig `yaml:"users"`
 	LogDir   string                `yaml:"log_dir"`
+	LLM      LLMConfig             `yaml:"llm"`
 }
 
 type UpstreamConfig struct {
@@ -27,6 +28,11 @@ type UpstreamConfig struct {
 type UserConfig struct {
 	Password  string `yaml:"password,omitempty"`
 	PublicKey string `yaml:"public_key,omitempty"`
+}
+
+type LLMConfig struct {
+	APIKey string `yaml:"api_key"`
+	Model  string `yaml:"model"`
 }
 
 // Parses from config file path based on the [Config], [UpstreamConfig], and [UserConfig] structs
@@ -80,6 +86,10 @@ func (c *Config) Validate() error {
 
 	if c.LogDir == "" {
 		return fmt.Errorf("Log directory is required")
+	}
+
+	if c.LLM.APIKey != "" && c.LLM.Model == "" {
+		c.LLM.Model = "openai/gpt-oss-120b"
 	}
 
 	return nil

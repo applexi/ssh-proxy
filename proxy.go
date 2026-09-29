@@ -19,7 +19,9 @@ type Proxy struct {
 
 	config       Config
 	serverConfig *ssh.ServerConfig // SSH downstream configuration
-	listener     net.Listener // TCP listener 
+	listener     net.Listener      // TCP listener
+
+	summaries sync.WaitGroup // Force stop to wait on running log summaries
 }
 
 // Returns a proxy based on a given valid proxy config file path
@@ -44,6 +46,8 @@ func NewProxy(configPath string) (*Proxy, error) {
 		config:       *config,
 		serverConfig: serverConfig,
 		listener:     nil,
+
+		summaries: sync.WaitGroup{},
 	}
 
 	return proxy, nil
@@ -51,8 +55,9 @@ func NewProxy(configPath string) (*Proxy, error) {
 
 // Stops proxy
 //
-// Only stops once just in case
+// Only stops once just in case. Waits on log summaries
 func (proxy *Proxy) Stop() {
+	// Stops al of proxy's main behavior
 	proxy.stopOnce.Do(func() {
 		close(proxy.stopCh)
 
@@ -60,6 +65,8 @@ func (proxy *Proxy) Stop() {
 			proxy.listener.Close()
 		}
 	})
+	// Waits on finishing summaries before returning (for Main)
+	proxy.summaries.Wait()
 	log.Println("Proxy stopped")
 }
 
@@ -233,7 +240,7 @@ func (proxy *Proxy) handleConnection(conn net.Conn) {
 
 // Handles a potential SSH session channel from downstream client by starting a matching channel with upstream server
 //
-// Terminates if error or when [Proxy.forwardSessionData] terminates 
+// Terminates if error or when [Proxy.forwardSessionData] terminates
 func (proxy *Proxy) handleSession(channel ssh.NewChannel, upstreamConn *ssh.Client, username string) {
 	// Open matching session channel on upstream
 	upstreamChannel, upstreamReqs, err := upstreamConn.OpenChannel("session", channel.ExtraData())
@@ -244,7 +251,7 @@ func (proxy *Proxy) handleSession(channel ssh.NewChannel, upstreamConn *ssh.Clie
 	}
 	defer upstreamChannel.Close()
 
-	// Accept downstream's session channel 
+	// Accept downstream's session channel
 	downstreamChannel, downstreamReqs, err := channel.Accept()
 	if err != nil {
 		log.Printf("Failed to accept downstream session: %v", err)
@@ -253,12 +260,21 @@ func (proxy *Proxy) handleSession(channel ssh.NewChannel, upstreamConn *ssh.Clie
 	defer downstreamChannel.Close()
 
 	// Create a session logger to log downstream stdin input
-	sessionLogger, err := NewSessionLogger(proxy.config.LogDir, username)
+	sessionLogger, err := NewSessionLogger(proxy.config.LogDir, username, proxy.config.LLM)
 	if err != nil {
 		log.Printf("Failed to create session logger: %v", err)
 		return
 	}
-	defer sessionLogger.Close()
+	// A session implies there should be a summary of its log! Done asynchronously
+	proxy.summaries.Add(1)
+	defer func() {
+		go func() {
+			defer proxy.summaries.Done()
+			if err := sessionLogger.Summarize(); err != nil {
+				log.Printf("Summarize session log error: %v", err)
+			}
+		}()
+	}()
 
 	// Concurrently forward both SSH session requests and data between client and upstream server bi-directionally
 	go proxy.forwardSessionRequests(downstreamReqs, upstreamReqs, downstreamChannel, upstreamChannel)
@@ -270,7 +286,9 @@ func (proxy *Proxy) handleSession(channel ssh.NewChannel, upstreamConn *ssh.Clie
 // Terminates when Stop is called, or when both downstream and upstream request channels have closed
 func (proxy *Proxy) forwardSessionRequests(downstreamReqs <-chan *ssh.Request, upstreamReqs <-chan *ssh.Request, downstreamChannel ssh.Channel, upstreamChannel ssh.Channel) {
 	for {
-		if downstreamReqs == nil && upstreamReqs == nil { return }
+		if downstreamReqs == nil && upstreamReqs == nil {
+			return
+		}
 		select {
 		// Client -> upstream server
 		case req, ok := <-downstreamReqs:
@@ -300,13 +318,14 @@ func (proxy *Proxy) forwardSessionRequests(downstreamReqs <-chan *ssh.Request, u
 
 // Forwards SSH session data (stdin, stdout, stderr) and logs client stdin via a session logger
 //
-// Terminates when stdout and stderr finish. Does not wait for stdin. Stdin EOF closes the upstream write side.
+// Terminates when stdout, stderr, and stdin finish.
 func (proxy *Proxy) forwardSessionData(downstreamChannel ssh.Channel, upstreamChannel ssh.Channel, sessionLogger *SessionLogger) {
 	var outputs sync.WaitGroup
-	outputs.Add(2)
+	outputs.Add(3)
 
 	// Forward stdin (downstream -> upstream + session log)
 	go func() {
+		defer outputs.Done()
 		sessionLogger.ForwardInput(downstreamChannel, upstreamChannel)
 		upstreamChannel.CloseWrite()
 	}()
@@ -319,6 +338,13 @@ func (proxy *Proxy) forwardSessionData(downstreamChannel ssh.Channel, upstreamCh
 	go func() {
 		defer outputs.Done()
 		io.Copy(downstreamChannel.Stderr(), upstreamChannel.Stderr())
+	}()
+
+	// If proxy stops, close upstream and downstream channels, which stops all session data goroutines
+	go func() {
+		<-proxy.stopCh
+		downstreamChannel.Close()
+		upstreamChannel.Close()
 	}()
 	outputs.Wait()
 }

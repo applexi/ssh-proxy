@@ -10,7 +10,9 @@ Shell traffic is forwarded as is to maximize transparency. Client session reques
 
 Client stdin is logged raw while those bytes are sent upstream. Each session gets `log_dir/<username>_<timestamp>.log`.
 
-A session ends when upstream stdout and stderr both finish or when the proxy server is stopped. When a client user disconnects, their connection with the proxy and the respective upstream connection closes. The listener stays up for other clients as long as the proxy is open.
+If `llm.api_key` is set, the proxy asks Groq for a security summary of that session log. The call runs asynchronously, and stopping the proxy waits for it to finish. The proxy accepts the upstream server's host key without verification (`ssh.InsecureIgnoreHostKey`), since that server is the one named in the config.
+
+A session ends when session data and requests finish or when the proxy server is stopped. When a client user disconnects, their connection with the proxy and the respective upstream connection closes. The listener stays up for other clients as long as the proxy is open.
 
 Authentication is based on a proxy [configuration file](#config-file-specifications). The proxy identifies itself to clients with `keys/proxy_host_key`.
 
@@ -28,10 +30,11 @@ Proxy refers to a configuration file path (default is `./config.yaml`). Please f
   - For each user, `user.username` is required
   - For each user, authentication will check `user.password` and `user.public_key` if provided, but at least one is required
 - Session-specific client user input will be written to logs, stored in `log_dir`
+- `llm.api_key` is a Groq API key. A non-empty key enables session summaries. An empty key disables them. `llm.model` defaults to `openai/gpt-oss-120b`
 
 ## On your computer
 
-Set `server.host` to `localhost`. Other fields will be based on the default [config file](./config.yaml).
+Set `server.host` to `localhost` and `server.port` to `2222`. Other fields will be based on the default [config file](./config.yaml).
 
 First, start a Docker container to act as an upstream server.
 
@@ -56,7 +59,7 @@ ssh -i keys/alice_key -p 2022 alice@localhost
 ssh -p 2022 bob@localhost
 ```
 
-Try testing window change SSH requests with the following command.
+Try testing window change SSH requests with the following command:
 
 ```bash
 ssh -t -p 2022 bob@localhost 'while true; do stty size; sleep 0.5; done'
@@ -70,7 +73,12 @@ Set `server.host` to `upstream` and `server.port` to `22`.
 docker compose up --build
 ```
 
-From the host, the proxy is `localhost:2022` and the upstream server is `localhost:2222` (`proxyuser` / `secret`).
+From the host, the proxy is `localhost:2022` and the upstream server is `localhost:2222` (`proxyuser` / `secret`). You can now SSH into the Docker container which is running the proxy.
+
+```bash
+ssh -i keys/alice_key -p 2022 alice@localhost
+ssh -p 2022 bob@localhost
+```
 
 Compose assumes:
 
@@ -78,3 +86,4 @@ Compose assumes:
 - `log_dir` is `./logs`
 - `./keys` contains `proxy_host_key`, `upstream_key`, and `upstream_key.pub`
 - the upstream user in the config is `proxyuser` with password `secret`
+- `llm.api_key` in `./config.yaml` is set when session summaries should run

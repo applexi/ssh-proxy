@@ -7,6 +7,7 @@ services:
       - ./config.yaml:/srv/config.yaml:ro
       - ./logs:/srv/logs
       - ./keys:/srv/keys:ro
+    stop_grace_period: 70s
     depends_on:
       - upstream
 

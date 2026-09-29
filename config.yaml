@@ -17,3 +17,8 @@ users:
 
 # Log file directory that session logs will be written to
 log_dir: ./logs
+
+# A Groq api_key enables session summaries. Leave it empty to disable them.
+llm:
+  api_key: 
+  model: openai/gpt-oss-120b

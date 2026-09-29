@@ -9,8 +9,6 @@ import (
 )
 
 func main() {
-	// All interfaces, so a published Docker port can reach the proxy.
-	// Local clients still connect to localhost:2022.
 	proxyPort := ":2022"
 	configPathFlag := flag.String("cfg", "./config.yaml", "path for config file (.yaml)")
 	flag.Parse()
