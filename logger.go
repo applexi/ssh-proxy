@@ -54,13 +54,11 @@ func (logger *SessionLogger) Close() error {
 
 // Closes the logger and summarizes the session log file before closing it
 func (logger *SessionLogger) Summarize() error {
-	if logger.llm.APIKey == "" {
-		return nil
-	}
-
 	if err := logger.Close(); err != nil {
 		return fmt.Errorf("Close session logger error: %w", err)
 	}
+
+	if logger.llm.APIKey == "" { return nil }
 
 	logPath := logger.file.Name()
 	rawInput, err := os.ReadFile(logPath)
