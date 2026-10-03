@@ -321,11 +321,15 @@ func (proxy *Proxy) forwardSessionRequests(downstreamReqs <-chan *ssh.Request, u
 // Terminates when stdout, stderr, and stdin finish.
 func (proxy *Proxy) forwardSessionData(downstreamChannel ssh.Channel, upstreamChannel ssh.Channel, sessionLogger *SessionLogger) {
 	var outputs sync.WaitGroup
-	outputs.Add(3)
+	input := make(chan struct{})
+	session := make(chan struct{})
+	defer close(session)
+
+	outputs.Add(2)
 
 	// Forward stdin (downstream -> upstream + session log)
 	go func() {
-		defer outputs.Done()
+		defer close(input)
 		sessionLogger.ForwardInput(downstreamChannel, upstreamChannel)
 		upstreamChannel.CloseWrite()
 	}()
@@ -342,9 +346,14 @@ func (proxy *Proxy) forwardSessionData(downstreamChannel ssh.Channel, upstreamCh
 
 	// If proxy stops, close upstream and downstream channels, which stops all session data goroutines
 	go func() {
-		<-proxy.stopCh
-		downstreamChannel.Close()
-		upstreamChannel.Close()
+		select {
+		case <-proxy.stopCh:
+			upstreamChannel.Close()
+			downstreamChannel.Close()
+		case <-session:
+		}
 	}()
 	outputs.Wait()
+	downstreamChannel.Close()
+	<-input
 }

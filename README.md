@@ -10,7 +10,7 @@ Shell traffic is forwarded as is to maximize transparency. Client session reques
 
 Client stdin is logged raw while those bytes are sent upstream. Each session gets `log_dir/<username>_<timestamp>.log`.
 
-If `llm.api_key` is set, the proxy asks Groq for a security summary of that session log. The call runs asynchronously, and stopping the proxy waits for it to finish. The proxy accepts the upstream server's host key without verification (`ssh.InsecureIgnoreHostKey`), since that server is the one named in the config.
+If `llm.api_key` is set, the proxy asks Groq for a security summary of that session log. The call runs asynchronously, and stopping the proxy waits for it to finish. The proxy accepts the upstream server's host key without verification (`ssh.InsecureIgnoreHostKey`) for this assignment, but in production, there should be a fixed upstream server host key for authentication to prevent man-in-the-middle malicious attacks.
 
 A session ends when session data and requests finish or when the proxy server is stopped. When a client user disconnects, their connection with the proxy and the respective upstream connection closes. The listener stays up for other clients as long as the proxy is open.
 

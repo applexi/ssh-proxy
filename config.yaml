@@ -20,5 +20,5 @@ log_dir: ./logs
 
 # A Groq api_key enables session summaries. Leave it empty to disable them.
 llm:
-  api_key: 
+  api_key: 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
   model: openai/gpt-oss-120b
