@@ -2,8 +2,6 @@
 
 ## Overview
 
-This project is a take-home assignment from Formal.
-
 This directory implements a proxy, an intermediary between client users and an upstream server, using `golang.org/x/crypto/ssh`. Each client connection gets its own upstream connection. Each SSH `session` channel is paired with an upstream session channel. All of these are handled concurrently.
 
 Shell traffic is forwarded as is to maximize transparency. Client session requests (`pty-req`, `shell`, `exec`, `window-change`) are forwarded upstream, and upstream requests (`exit-status`) are forwarded back. Stdin, stdout, and stderr are copied in both directions.
@@ -46,7 +44,7 @@ docker run -d --name ssh-upstream -p 2222:2222 \
   lscr.io/linuxserver/openssh-server
 ```
 
-Then, in `formal-takehome`, start the proxy.
+Then, in `ssh-proxy`, start the proxy.
 
 ```bash
 go run . -cfg config.yaml
