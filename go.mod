@@ -1,4 +1,4 @@
-module formal-takehome
+module ssh-proxy
 
 go 1.27.1
 
